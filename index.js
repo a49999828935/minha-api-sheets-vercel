@@ -5,7 +5,7 @@ const { google } = require('googleapis');
 const app = express();
 app.use(express.json()); // Habilita o parser de JSON
 
-// Rota para LER dados da planilha
+// Rota para LER dados da planilha (agora busca 4 colunas)
 app.get('/api/dados', async (req, res) => {
   try {
     const auth = new google.auth.GoogleAuth({
@@ -19,10 +19,13 @@ app.get('/api/dados', async (req, res) => {
     const sheets = google.sheets({ version: 'v4', auth });
     const spreadsheetId = process.env.SPREADSHEET_ID;
 
+    // --- MUDANÇA AQUI ---
+    // Alterado o range para buscar 4 colunas (A até D)
     const response = await sheets.spreadsheets.values.get({
       spreadsheetId,
-      range: 'Página1!A:C',
+      range: 'Página1!A:D', // Ajuste 'Página1' se o nome da sua aba for outro
     });
+    // --- FIM DA MUDANÇA ---
 
     const rows = response.data.values;
     if (rows && rows.length) {
@@ -44,33 +47,42 @@ app.get('/api/dados', async (req, res) => {
   }
 });
 
-// Rota para INCLUIR dados na planilha
+// Rota para INCLUIR dados na planilha (agora recebe dados do motor)
 app.post('/api/dados', async (req, res) => {
   try {
-    const { nome, idade, cidade } = req.body;
-    if (!nome || !idade || !cidade) {
-      return res.status(400).send('Erro: Faltam dados. É necessário enviar nome, idade e cidade.');
+    // --- MUDANÇA AQUI ---
+    // As variáveis foram atualizadas para o payload do motor
+    const { motorId, temperatura, vibracao, timestamp } = req.body;
+    
+    // Validação atualizada
+    if (!motorId || !temperatura || !vibracao || !timestamp) {
+      return res.status(400).send('Erro: Faltam dados. É necessário enviar motorId, temperatura, vibracao e timestamp.');
     }
+    // --- FIM DA MUDANÇA ---
 
     const auth = new google.auth.GoogleAuth({
       credentials: {
         client_email: process.env.GOOGLE_CLIENT_EMAIL,
         private_key: process.env.GOOGLE_PRIVATE_KEY.replace(/\\n/g, '\n'),
       },
-      scopes: ['https://www.googleapis.com/auth/spreadsheets'], // Escopo de leitura e escrita
+      scopes: ['https://www.googleapis.com/auth/spreadsheets'],
     });
 
     const sheets = google.sheets({ version: 'v4', auth });
     const spreadsheetId = process.env.SPREADSHEET_ID;
 
+    // --- MUDANÇA AQUI ---
+    // O range foi atualizado para A:D
+    // O array de 'values' foi atualizado para os novos dados
     await sheets.spreadsheets.values.append({
       spreadsheetId,
-      range: 'Página1!A:C',
+      range: 'Página1!A:D', // Ajuste 'Página1' se o nome da sua aba for outro
       valueInputOption: 'USER_ENTERED',
       resource: {
-        values: [[nome, idade, cidade]],
+        values: [[motorId, temperatura, vibracao, timestamp]],
       },
     });
+    // --- FIM DA MUDANÇA ---
 
     res.status(201).json({ message: 'Dados adicionados com sucesso!' });
   } catch (error) {
