@@ -19,8 +19,8 @@ async function getAuth() {
 // Rota 1: POST para ADICIONAR dados
 app.post('/api/dados', async (req, res) => {
   try {
-    const { motorId, temperatura, vibracao, timestamp } = req.body;
-    if (!motorId || !temperatura || !vibracao || !timestamp) {
+    const { motorID, temperatura, vibracao, timestamp } = req.body; // Alterado aqui
+    if (!motorID || !temperatura || !vibracao || !timestamp) { // Alterado aqui
       return res.status(400).send('Erro: Faltam dados.');
     }
 
@@ -33,7 +33,7 @@ app.post('/api/dados', async (req, res) => {
       range: 'Página1!A:D', // Ajuste 'Página1' se o nome da sua aba for outro
       valueInputOption: 'USER_ENTERED',
       resource: {
-        values: [[motorId, temperatura, vibracao, timestamp]],
+        values: [[motorID, temperatura, vibracao, timestamp]], // Alterado aqui
       },
     });
 
@@ -80,10 +80,10 @@ app.get('/api/dados', async (req, res) => {
 
 // --- ROTA NOVA! (BUSCAR ÚLTIMO DADO) ---
 // Rota 3: GET para BUSCAR A ÚLTIMA LEITURA de um motor
-// Esta rota (/:motorId/atual) deve vir ANTES da rota (/:motorId)
-app.get('/api/dados/:motorId/atual', async (req, res) => {
+// Esta rota (/:motorID/atual) deve vir ANTES da rota (/:motorID)
+app.get('/api/dados/:motorID/atual', async (req, res) => { // Alterado aqui
   try {
-    const { motorId } = req.params;
+    const { motorID } = req.params; // Alterado aqui
     const auth = await getAuth();
     const sheets = google.sheets({ version: 'v4', auth });
     const spreadsheetId = process.env.SPREADSHEET_ID;
@@ -101,15 +101,15 @@ app.get('/api/dados/:motorId/atual', async (req, res) => {
 
     const headers = rows[0];
     const data = rows.slice(1);
-    const motorIdIndex = headers.indexOf('motorId');
-    if (motorIdIndex === -1) {
-      return res.status(500).send("Erro: Coluna 'motorId' não encontrada.");
+    const motorIDIndex = headers.indexOf('motorID'); // Alterado aqui
+    if (motorIDIndex === -1) { // Alterado aqui
+      return res.status(500).send("Erro: Coluna 'motorID' não encontrada."); // Alterado aqui
     }
 
     // 2. Filtra os dados
-    const filteredRows = data.filter(row => row[motorIdIndex] === motorId);
+    const filteredRows = data.filter(row => row[motorIDIndex] === motorID); // Alterado aqui
     if (filteredRows.length === 0) {
-      return res.status(404).json({ message: `Nenhum dado encontrado para o motor ${motorId}.` });
+      return res.status(404).json({ message: `Nenhum dado encontrado para o motor ${motorID}.` }); // Alterado aqui
     }
 
     // 3. Pega o ÚLTIMO item da lista
@@ -125,7 +125,7 @@ app.get('/api/dados/:motorId/atual', async (req, res) => {
     res.json(formattedData); // Retorna um único objeto
 
   } catch (error) {
-    console.error(`Erro ao buscar última leitura do motor ${req.params.motorId}:`, error);
+    console.error(`Erro ao buscar última leitura do motor ${req.params.motorID}:`, error); // Alterado aqui
     res.status(500).send('Erro no servidor');
   }
 });
@@ -134,9 +134,9 @@ app.get('/api/dados/:motorId/atual', async (req, res) => {
 
 // Rota 4: GET para BUSCAR TODOS OS DADOS de um motor
 // Esta rota mais genérica vem DEPOIS da rota '/atual'
-app.get('/api/dados/:motorId', async (req, res) => {
+app.get('/api/dados/:motorID', async (req, res) => { // Alterado aqui
   try {
-    const { motorId } = req.params;
+    const { motorID } = req.params; // Alterado aqui
     const auth = await getAuth();
     const sheets = google.sheets({ version: 'v4', auth });
     const spreadsheetId = process.env.SPREADSHEET_ID;
@@ -153,14 +153,14 @@ app.get('/api/dados/:motorId', async (req, res) => {
 
     const headers = rows[0];
     const data = rows.slice(1);
-    const motorIdIndex = headers.indexOf('motorId');
-    if (motorIdIndex === -1) {
-      return res.status(500).send("Erro: Coluna 'motorId' não encontrada.");
+    const motorIDIndex = headers.indexOf('motorID'); // Alterado aqui
+    if (motorIDIndex === -1) { // Alterado aqui
+      return res.status(500).send("Erro: Coluna 'motorID' não encontrada."); // Alterado aqui
     }
 
-    const filteredRows = data.filter(row => row[motorIdIndex] === motorId);
+    const filteredRows = data.filter(row => row[motorIDIndex] === motorID); // Alterado aqui
     if (filteredRows.length === 0) {
-      return res.status(404).json({ message: `Nenhum dado encontrado para o motor ${motorId}.` });
+      return res.status(404).json({ message: `Nenhum dado encontrado para o motor ${motorID}.` }); // Alterado aqui
     }
 
     const formattedData = filteredRows.map((row) => {
@@ -173,7 +173,7 @@ app.get('/api/dados/:motorId', async (req, res) => {
 
     res.json(formattedData);
   } catch (error) {
-    console.error(`Erro ao buscar dados do motor ${req.params.motorId}:`, error);
+    console.error(`Erro ao buscar dados do motor ${req.params.motorID}:`, error); // Alterado aqui
     res.status(500).send('Erro no servidor');
   }
 });
