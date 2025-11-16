@@ -1,79 +1,33 @@
-// Importa as bibliotecas necessárias
 const express = require('express');
 const { google } = require('googleapis');
 
 const app = express();
-app.use(express.json()); // Habilita o parser de JSON
+app.use(express.json());
 
-// Rota para LER dados da planilha (agora busca 4 colunas)
-app.get('/api/dados', async (req, res) => {
-  try {
-    const auth = new google.auth.GoogleAuth({
-      credentials: {
-        client_email: process.env.GOOGLE_CLIENT_EMAIL,
-        private_key: process.env.GOOGLE_PRIVATE_KEY.replace(/\\n/g, '\n'),
-      },
-      scopes: ['https://www.googleapis.com/auth/spreadsheets.readonly'],
-    });
+// Função de autenticação (colocamos separado para reutilizar)
+async function getAuth() {
+  const auth = new google.auth.GoogleAuth({
+    credentials: {
+      client_email: process.env.GOOGLE_CLIENT_EMAIL,
+      private_key: process.env.GOOGLE_PRIVATE_KEY.replace(/\\n/g, '\n'),
+    },
+    scopes: ['https://www.googleapis.com/auth/spreadsheets'], // Usamos o escopo completo
+  });
+  return auth;
+}
 
-    const sheets = google.sheets({ version: 'v4', auth });
-    const spreadsheetId = process.env.SPREADSHEET_ID;
-
-    // --- MUDANÇA AQUI ---
-    // Alterado o range para buscar 4 colunas (A até D)
-    const response = await sheets.spreadsheets.values.get({
-      spreadsheetId,
-      range: 'Página1!A:D', // Ajuste 'Página1' se o nome da sua aba for outro
-    });
-    // --- FIM DA MUDANÇA ---
-
-    const rows = response.data.values;
-    if (rows && rows.length) {
-      const headers = rows[0];
-      const data = rows.slice(1).map((row) => {
-        const rowData = {};
-        headers.forEach((header, index) => {
-          rowData[header] = row[index];
-        });
-        return rowData;
-      });
-      res.json(data);
-    } else {
-      res.json({ message: 'Nenhum dado encontrado.' });
-    }
-  } catch (error) {
-    console.error('Erro ao buscar dados da planilha:', error);
-    res.status(500).send('Erro no servidor');
-  }
-});
-
-// Rota para INCLUIR dados na planilha (agora recebe dados do motor)
+// Rota 1: POST para ADICIONAR dados (sem mudanças)
 app.post('/api/dados', async (req, res) => {
   try {
-    // --- MUDANÇA AQUI ---
-    // As variáveis foram atualizadas para o payload do motor
     const { motorId, temperatura, vibracao, timestamp } = req.body;
-    
-    // Validação atualizada
     if (!motorId || !temperatura || !vibracao || !timestamp) {
-      return res.status(400).send('Erro: Faltam dados. É necessário enviar motorId, temperatura, vibracao e timestamp.');
+      return res.status(400).send('Erro: Faltam dados.');
     }
-    // --- FIM DA MUDANÇA ---
 
-    const auth = new google.auth.GoogleAuth({
-      credentials: {
-        client_email: process.env.GOOGLE_CLIENT_EMAIL,
-        private_key: process.env.GOOGLE_PRIVATE_KEY.replace(/\\n/g, '\n'),
-      },
-      scopes: ['https://www.googleapis.com/auth/spreadsheets'],
-    });
-
+    const auth = await getAuth();
     const sheets = google.sheets({ version: 'v4', auth });
     const spreadsheetId = process.env.SPREADSHEET_ID;
 
-    // --- MUDANÇA AQUI ---
-    // O range foi atualizado para A:D
-    // O array de 'values' foi atualizado para os novos dados
     await sheets.spreadsheets.values.append({
       spreadsheetId,
       range: 'Página1!A:D', // Ajuste 'Página1' se o nome da sua aba for outro
@@ -82,14 +36,104 @@ app.post('/api/dados', async (req, res) => {
         values: [[motorId, temperatura, vibracao, timestamp]],
       },
     });
-    // --- FIM DA MUDANÇA ---
 
     res.status(201).json({ message: 'Dados adicionados com sucesso!' });
   } catch (error) {
-    console.error('Erro ao adicionar dados na planilha:', error);
+    console.error('Erro ao adicionar dados:', error);
     res.status(500).send('Erro no servidor');
   }
 });
+
+// Rota 2: GET para BUSCAR TUDO (sem mudanças)
+app.get('/api/dados', async (req, res) => {
+  try {
+    const auth = await getAuth();
+    const sheets = google.sheets({ version: 'v4', auth });
+    const spreadsheetId = process.env.SPREADSHEET_ID;
+
+    const response = await sheets.spreadsheets.values.get({
+      spreadsheetId,
+      range: 'Página1!A:D', // Ajuste 'Página1'
+    });
+
+    const rows = response.data.values;
+    if (!rows || rows.length <= 1) {
+      return res.json({ message: 'Nenhum dado encontrado.' });
+    }
+
+    // Pega cabeçalhos e formata os dados
+    const headers = rows[0];
+    const data = rows.slice(1).map((row) => {
+      const rowData = {};
+      headers.forEach((header, index) => {
+        rowData[header] = row[index];
+      });
+      return rowData;
+    });
+
+    res.json(data);
+  } catch (error) {
+    console.error('Erro ao buscar todos os dados:', error);
+    res.status(500).send('Erro no servidor');
+  }
+});
+
+// --- ROTA NOVA! ---
+// Rota 3: GET para BUSCAR DADOS DE UM MOTOR ESPECÍFICO
+app.get('/api/dados/:motorId', async (req, res) => {
+  try {
+    // 1. Pega o ID do motor da URL
+    const { motorId } = req.params;
+
+    const auth = await getAuth();
+    const sheets = google.sheets({ version: 'v4', auth });
+    const spreadsheetId = process.env.SPREADSHEET_ID;
+
+    // 2. Busca TUDO da planilha
+    const response = await sheets.spreadsheets.values.get({
+      spreadsheetId,
+      range: 'Página1!A:D', // Ajuste 'Página1'
+    });
+
+    const rows = response.data.values;
+    if (!rows || rows.length <= 1) {
+      return res.status(404).json({ message: 'Nenhum dado encontrado.' });
+    }
+
+    const headers = rows[0];
+    const data = rows.slice(1);
+
+    // 3. Encontra a coluna "motorId"
+    const motorIdIndex = headers.indexOf('motorId');
+    if (motorIdIndex === -1) {
+      return res.status(500).send("Erro: Coluna 'motorId' não encontrada na planilha.");
+    }
+
+    // 4. Filtra os dados em memória
+    // Compara o valor da coluna (row[motorIdIndex]) com o ID da URL (motorId)
+    const filteredRows = data.filter(row => row[motorIdIndex] === motorId);
+
+    if (filteredRows.length === 0) {
+      return res.status(404).json({ message: `Nenhum dado encontrado para o motor ${motorId}.` });
+    }
+
+    // 5. Formata os dados filtrados
+    const formattedData = filteredRows.map((row) => {
+      const rowData = {};
+      headers.forEach((header, index) => {
+        rowData[header] = row[index];
+      });
+      return rowData;
+    });
+
+    res.json(formattedData);
+
+  } catch (error) {
+    console.error(`Erro ao buscar dados do motor ${req.params.motorId}:`, error);
+    res.status(500).send('Erro no servidor');
+  }
+});
+// --- FIM DA ROTA NOVA ---
 
 // Inicia o servidor
 const PORT = process.env.PORT || 3000;
